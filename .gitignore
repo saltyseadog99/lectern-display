@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.log
+last.txt
+rotation.txt
+display.png
