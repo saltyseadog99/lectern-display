@@ -119,15 +119,17 @@ ExecStartPre=/usr/sbin/rfkill unblock wifi
 ExecStartPre=/sbin/ip link set wlan0 up
 EOF
 
-# 13. Reload and enable services
-tty_services=(hostapd dnsmasq dhcpcd pi-image-gui.service)
-for svc in "${tty_services[@]}"; do
-echo "Enabling $svc"
+# 13. Reload, unmask, and enable services
+# Ensure hostapd is unmasked before enabling
 systemctl unmask hostapd
-systemctl enable --now $svc || true
+systemctl daemon-reload
+# Enable and start core services
+for svc in hostapd dnsmasq dhcpcd pi-image-gui.service; do
+  echo "Enabling $svc"
+  systemctl enable --now $svc || true
 done
 
-# 14. Summary
+# 14. Summary. Summary
 echo
 echo "Setup complete. Connect to SSID '${SSID}' with passphrase '${PASSPHRASE}'."
 echo "Access the GUI at http://192.168.4.1:8000/"
