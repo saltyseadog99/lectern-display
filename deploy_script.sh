@@ -31,7 +31,7 @@ ip link set wlan0 up
 # 3. Install required packages
 apt install -y \
   python3 python3-venv python3-pip python3-flask python3-werkzeug python3-pillow \
-  fbi git dnsmasq hostapd dhcpcd5 net-tools
+  fbi git hostapd dnsmasq dhcpcd5 net-tools
 
 # 4. Prepare application directory
 mkdir -p "${UPLOAD_DIR}"
@@ -68,7 +68,7 @@ rsn_pairwise=CCMP
 EOF
 sed -i 's|#DAEMON_CONF=.*|DAEMON_CONF="/etc/hostapd/hostapd.conf"|' /etc/default/hostapd
 
-# 7. Configure dnsmasq
+# 7. Configure dnsmasq (revert to default resolv.conf handling)
 mv "${DNSMASQ_CONF}" "${DNSMASQ_CONF}.orig" || true
 cat > "${DNSMASQ_CONF}" <<EOF
 interface=wlan0
@@ -76,7 +76,10 @@ dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
 dhcp-option=3,192.168.4.1
 EOF
 
-# 8. Configure static IP (dhcpcd)
+# 8. Leave resolv.conf to DHCP to populate
+# (avoid manual DNS entries to allow dnsmasq to function)
+
+# 9. Configure static IP (dhcpcd)
 mv "${DHCPCD_CONF}" "${DHCPCD_CONF}.orig" || true
 cat > "${DHCPCD_CONF}" <<EOF
 interface wlan0
@@ -84,7 +87,7 @@ interface wlan0
   nohook wpa_supplicant
 EOF
 
-# 9. Create Flask service
+# 10. Create Flask service
 cat > "${SERVICE_FILE}" <<EOF
 [Unit]
 Description=Pi Image Upload & Display GUI
@@ -101,7 +104,7 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-# 10. Add hostapd override to prep interface
+# 11. Add hostapd override to prep interface
 mkdir -p /etc/systemd/system/hostapd.service.d
 cat > /etc/systemd/system/hostapd.service.d/override.conf <<EOF
 [Unit]
@@ -112,14 +115,14 @@ ExecStartPre=/usr/sbin/rfkill unblock wifi
 ExecStartPre=/sbin/ip link set wlan0 up
 EOF
 
-# 11. Reload, unmask, and enable services
+# 12. Reload, unmask, and enable services
 systemctl unmask hostapd
-default_services=(hostapd dnsmasq dhcpcd pi-image-gui.service)
-for svc in "${default_services[@]}"; do
+services=(hostapd dnsmasq dhcpcd pi-image-gui.service)
+for svc in "${services[@]}"; do
   systemctl enable --now "$svc" || true
 done
 
-# 12. Summary
+# 13. Summary
 echo
-echo "Setup complete. Connect to SSID '${SSID}' with passphrase '${PASSPHRASE}'."
-echo "Access the GUI at http://192.168.4.1:8000/"
+ echo "Setup complete. SSID '${SSID}', passphrase '${PASSPHRASE}'."
+echo "GUI at http://192.168.4.1:8000/"
