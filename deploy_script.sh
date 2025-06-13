@@ -45,10 +45,10 @@ mkdir -p "${UPLOAD_DIR}"
 chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
 chmod -R u+rwX "${APP_DIR}"
 
-# 7. Deploy application code
+# 7. Deploy application code as ${APP_USER}
 rm -rf "${APP_DIR}.tmp"
 if [ ! -d "${APP_DIR}/.git" ]; then
-  git clone --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}.tmp"
+  sudo -u "${APP_USER}" git clone --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}.tmp"
   rm -rf "${APP_DIR}"
   mv "${APP_DIR}.tmp" "${APP_DIR}"
   chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
@@ -57,7 +57,7 @@ else
   sudo -u "${APP_USER}" git pull origin "${BRANCH}"
 fi
 
-# 8. Configure hostapd
+# 8. Configure hostapd Configure hostapd
 cat > "${HOSTAPD_CONF}" <<EOF
 interface=wlan0
 driver=nl80211
