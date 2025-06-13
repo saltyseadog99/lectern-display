@@ -13,8 +13,8 @@ REPO_URL="https://github.com/saltyseadog99/lectern-display.git"  # Your Git repo
 BRANCH="main"
 
 # Access Point settings
-SSID="MyPiHotspot"
-PASSPHRASE="SecurePass123"
+SSID="lectern03"
+PASSPHRASE="Daggerboard!"
 CHANNEL=6
 
 HOSTAPD_CONF="/etc/hostapd/hostapd.conf"
@@ -22,27 +22,33 @@ DNSMASQ_CONF="/etc/dnsmasq.conf"
 DHCPCD_CONF="/etc/dhcpcd.conf"
 SERVICE_FILE="/etc/systemd/system/pi-image-gui.service"
 
-# 2. Install required packages
-apt update
-apt install -y \
-  python3 python3-venv python3-pip python3-flask python3-werkzeug python3-pillow \
-  fbi hostapd dnsmasq dhcpcd5 net-tools git rfkill
-
-# 3. Ensure Wi-Fi is unblocked and interface is up
+# 2. Ensure Wi-Fi is unblocked and interface is up
+apt install -y rfkill
 rfkill unblock wifi
 ip link set wlan0 up
 
-# 4. Create application directory and uploads folder
+# 3. Configure networking services before package fetch
+systemctl daemon-reload
+systemctl restart hostapd dnsmasq dhcpcd
+
+# 4. Install required packages
+apt update
+apt install -y \
+  python3 python3-venv python3-pip python3-flask python3-werkzeug python3-pillow \
+  fbi git
+
+# 5. Install optional packages
+apt install -y dnsmasq hostapd dhcpcd5 net-tools
+
+# 6. Create application directory and uploads folder
 mkdir -p "${UPLOAD_DIR}"
 chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
 chmod -R u+rwX "${APP_DIR}"
 
-# 5. Deploy application code with Git initialization
+# 7. Deploy application code with Git initialization
 if [ -n "${REPO_URL}" ]; then
-  # Clean up any stale temp directories
   rm -rf "${APP_DIR}.tmp"
   if [ ! -d "${APP_DIR}/.git" ]; then
-    # Clone into a temp folder, then replace existing directory atomically
     git clone --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}.tmp"
     rm -rf "${APP_DIR}"
     mv "${APP_DIR}.tmp" "${APP_DIR}"
@@ -55,7 +61,7 @@ else
   echo "Note: No REPO_URL set; ensure app.py and uploads/ are in ${APP_DIR}"
 fi
 
-# 6. Configure hostapd (Access Point)
+# 8. Configure hostapd (Access Point)
 cat > "${HOSTAPD_CONF}" <<EOF
 interface=wlan0
 driver=nl80211
@@ -73,7 +79,7 @@ rsn_pairwise=CCMP
 EOF
 sed -i 's|#DAEMON_CONF=.*|DAEMON_CONF="/etc/hostapd/hostapd.conf"|' /etc/default/hostapd
 
-# 7. Configure dnsmasq (DHCP)
+# 9. Configure dnsmasq (DHCP)
 mv "${DNSMASQ_CONF}" "${DNSMASQ_CONF}.orig" || true
 cat > "${DNSMASQ_CONF}" <<EOF
 interface=wlan0
@@ -81,7 +87,7 @@ dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
 dhcp-option=3,192.168.4.1
 EOF
 
-# 8. Configure static IP (dhcpcd)
+# 10. Configure static IP (dhcpcd)
 mv "${DHCPCD_CONF}" "${DHCPCD_CONF}.orig" || true
 cat > "${DHCPCD_CONF}" <<EOF
 interface wlan0
@@ -89,7 +95,7 @@ interface wlan0
   nohook wpa_supplicant
 EOF
 
-# 9. Create systemd service for the Flask app
+# 11. Create systemd service for the Flask app
 cat > "${SERVICE_FILE}" <<EOF
 [Unit]
 Description=Pi Image Upload & Display GUI
@@ -106,14 +112,23 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-# 10. Enable and start services
-# Unmask hostapd in case it was masked previously
-systemctl unmask hostapd
-systemctl daemon-reload
-systemctl enable hostapd dnsmasq dhcpcd pi-image-gui.service
-systemctl restart hostapd dnsmasq dhcpcd pi-image-gui.service
+# 12. Create hostapd override to unblock Wi-Fi and bring up WLAN
+mkdir -p /etc/systemd/system/hostapd.service.d
+cat > /etc/systemd/system/hostapd.service.d/override.conf <<EOF
+[Unit]
+Before=network.target
 
-# 11. Summary
+[Service]
+ExecStartPre=/usr/sbin/rfkill unblock wifi
+ExecStartPre=/sbin/ip link set wlan0 up
+EOF
+
+# 13. Reload systemd and enable services
+systemctl unmask hostapd
+enable_services=(hostapd dnsmasq dhcpcd pi-image-gui.service)
+for svc in "${enable_services[@]}"; do systemctl enable --now "$svc"; done
+
+# 14. Summary
 echo
 echo "Installation complete."
 echo "Connect to Wi-Fi SSID '${SSID}' with password '${PASSPHRASE}'."
