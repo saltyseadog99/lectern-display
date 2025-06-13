@@ -39,8 +39,10 @@ chmod -R u+rwX "${APP_DIR}"
 
 # 5. Deploy application code with Git initialization
 if [ -n "${REPO_URL}" ]; then
+  # Clean up any stale temp directories
+  rm -rf "${APP_DIR}.tmp"
   if [ ! -d "${APP_DIR}/.git" ]; then
-    # Clone into a temp folder then move to preserve permissions
+    # Clone into a temp folder then atomically replace
     git clone --branch "${BRANCH}" "${REPO_URL}" "${APP_DIR}.tmp"
     mv "${APP_DIR}.tmp" "${APP_DIR}"
     chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
@@ -52,7 +54,7 @@ else
   echo "Note: No REPO_URL set; ensure app.py and uploads/ are in ${APP_DIR}"
 fi
 
-# 6. Configure hostapd (Access Point)
+# 6. Configure hostapd (Access Point) Configure hostapd (Access Point)
 cat > "${HOSTAPD_CONF}" <<EOF
 interface=wlan0
 driver=nl80211
