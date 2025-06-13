@@ -85,15 +85,16 @@ dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
 dhcp-option=3,192.168.4.1
 EOF
 
-# 10. Configure static IP
+# 10. Configure static IP and DNS (dhcpcd)
 mv "${DHCPCD_CONF}" "${DHCPCD_CONF}.orig" || true
 cat > "${DHCPCD_CONF}" <<EOF
 interface wlan0
   static ip_address=192.168.4.1/24
+  static domain_name_servers=8.8.8.8 1.1.1.1
   nohook wpa_supplicant
 EOF
 
-# 11. Create Flask service
+# 11. Create Flask service. Create Flask service
 cat > "${SERVICE_FILE}" <<EOF
 [Unit]
 Description=Pi Image Upload & Display GUI
