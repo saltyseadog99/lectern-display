@@ -26,14 +26,18 @@ SERVICE_FILE="/etc/systemd/system/pi-image-gui.service"
 apt update
 apt install -y \
   python3 python3-venv python3-pip python3-flask python3-werkzeug python3-pillow \
-  fbi hostapd dnsmasq dhcpcd5 net-tools git
+  fbi hostapd dnsmasq dhcpcd5 net-tools git rfkill
 
-# 3. Create application directory and uploads folder
+# 3. Ensure Wi-Fi is unblocked and interface is up
+rfkill unblock wifi
+ip link set wlan0 up
+
+# 4. Create application directory and uploads folder
 mkdir -p "${UPLOAD_DIR}"
 chown -R "${APP_USER}:${APP_USER}" "${APP_DIR}"
 chmod -R u+rwX "${APP_DIR}"
 
-# 4. Deploy application code with Git initialization
+# 5. Deploy application code with Git initialization
 if [ -n "${REPO_URL}" ]; then
   if [ ! -d "${APP_DIR}/.git" ]; then
     # Clone into a temp folder then move to preserve permissions
@@ -48,7 +52,7 @@ else
   echo "Note: No REPO_URL set; ensure app.py and uploads/ are in ${APP_DIR}"
 fi
 
-# 5. Configure hostapd (Access Point)
+# 6. Configure hostapd (Access Point)
 cat > "${HOSTAPD_CONF}" <<EOF
 interface=wlan0
 driver=nl80211
@@ -66,7 +70,7 @@ rsn_pairwise=CCMP
 EOF
 sed -i 's|#DAEMON_CONF=.*|DAEMON_CONF="/etc/hostapd/hostapd.conf"|' /etc/default/hostapd
 
-# 6. Configure dnsmasq (DHCP)
+# 7. Configure dnsmasq (DHCP)
 mv "${DNSMASQ_CONF}" "${DNSMASQ_CONF}.orig" || true
 cat > "${DNSMASQ_CONF}" <<EOF
 interface=wlan0
@@ -74,7 +78,7 @@ dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
 dhcp-option=3,192.168.4.1
 EOF
 
-# 7. Configure static IP (dhcpcd)
+# 8. Configure static IP (dhcpcd)
 mv "${DHCPCD_CONF}" "${DHCPCD_CONF}.orig" || true
 cat > "${DHCPCD_CONF}" <<EOF
 interface wlan0
@@ -82,7 +86,7 @@ interface wlan0
   nohook wpa_supplicant
 EOF
 
-# 8. Create systemd service for the Flask app
+# 9. Create systemd service for the Flask app
 cat > "${SERVICE_FILE}" <<EOF
 [Unit]
 Description=Pi Image Upload & Display GUI
@@ -99,12 +103,14 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-# 9. Enable and start services
+# 10. Enable and start services
+# Unmask hostapd in case it was masked previously
+systemctl unmask hostapd
 systemctl daemon-reload
 systemctl enable hostapd dnsmasq dhcpcd pi-image-gui.service
 systemctl restart hostapd dnsmasq dhcpcd pi-image-gui.service
 
-# 10. Summary
+# 11. Summary
 echo
 echo "Installation complete."
 echo "Connect to Wi-Fi SSID '${SSID}' with password '${PASSPHRASE}'."
