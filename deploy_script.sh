@@ -22,13 +22,15 @@ DNSMASQ_CONF="/etc/dnsmasq.conf"
 DHCPCD_CONF="/etc/dhcpcd.conf"
 SERVICE_FILE="/etc/systemd/system/pi-image-gui.service"
 
-# 2. Unblock Wi-Fi and bring up interface
+# 2. Unblock Wi-Fi, bring up interface, and seed DNS
 apt update
 apt install -y rfkill
 rfkill unblock wifi
 ip link set wlan0 up
+# Ensure DNS works for upstream access
+echo "nameserver 8.8.8.8" > /etc/resolv.conf
 
-# 3. Configure networking services for DNS resolution
+# 3. Configure networking services for DNS resolution Configure networking services for DNS resolution
 systemctl daemon-reload
 systemctl restart hostapd dnsmasq dhcpcd || true
 
